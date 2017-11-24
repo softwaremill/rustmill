@@ -4,3 +4,4 @@ version = "0.1.0"
 authors = ["belfz <marcinbar1@gmail.com>"]
 
 [dependencies]
+image = "0.17.0"
