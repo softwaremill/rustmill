@@ -50,7 +50,6 @@ impl App {
 
     fn find_objects(&mut self) {
         let treshold = 20;
-        // let objects: Vec<Object> = Vec::new();
 
         let vector: Vec<(u32, u32)> = self.img
             .pixels()
@@ -62,34 +61,60 @@ impl App {
             })
             .collect();
         
-        let mut polygons: Vec<Polygon> = vec![];
-        for coord in &vector {
-            let p1 = polygons.clone();
-            let matching_polygons: Vec<usize> = p1
-                .iter()
-                .enumerate()
-                .filter_map(|(idx, p)| {
-                    if (p.contains_neighbour(&coord)) {
-                        Some(idx)
-                    } else {
-                        None
+        let mut empty: Vec<Polygon> = vec![];
+        let polygons: Vec<Polygon> = vector
+            .into_iter()
+            .fold(empty, |acc, coord| {
+                // println!("{:#?}", acc);
+
+                let matching_polygons: Vec<usize> = acc.clone()
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, p)| {
+                        if (p.contains_neighbour(&coord)) {
+                            Some(idx)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                let len: usize = matching_polygons.len();
+
+                if len == 0 {
+                    let mut acc_2: Vec<Polygon> = vec![];
+                    for c in acc.into_iter() {
+                        acc_2.push(c);
                     }
-                })
-                .collect();
-            let len: usize = matching_polygons.len();
+                    acc_2.push(Polygon::new(&coord));
+                    acc_2
+                } else if len == 1 {
+                    add(acc, &coord, matching_polygons[0])
+                } else if len == 2 {
+                    add_and_merge(acc, &coord, matching_polygons[0], matching_polygons[1])
+                } else {
+                    panic!(":(");
+                }
+                
+            });
 
-            if (len == 0) {
-                polygons.push(Polygon::new(&coord));
-            } else if (len == 1) {
-                polygons.get_mut(matching_polygons[0]).unwrap().add(&coord);
-            } else if (len == 2) {
-                add_and_merge(polygons, &coord, matching_polygons[0], matching_polygons[1]);
-            }
-        }
-
-        println!("{:?}", vector);
+        println!("{:#?}", polygons);
+        println!("Found {} polygons", polygons.len());
     }
 
+}
+
+pub fn add(polygons: Vec<Polygon>, coord: &Coord, first: usize) -> Vec<Polygon> {
+    let mut newVec: Vec<Polygon> = vec!();
+    for (idx, polygon) in polygons.into_iter().enumerate() {
+        if idx == first {
+            newVec.push(polygon.add(coord));
+        } else {
+            newVec.push(polygon);
+        }
+    }
+    // newVec.push(coord);
+    newVec
 }
 
 pub fn add_and_merge(polygons: Vec<Polygon>, coord: &Coord, first: usize, second: usize) -> Vec<Polygon> {
@@ -107,7 +132,7 @@ pub fn add_and_merge(polygons: Vec<Polygon>, coord: &Coord, first: usize, second
         }
     }
     
-    let merged = first_polygon.unwrap().add(coord).merge(&second_polygon.unwrap());
+    let merged = first_polygon.unwrap().merge(&second_polygon.unwrap()).add(coord);
     newVec.push(merged);
     newVec
     // first_polygon.add(coord);
