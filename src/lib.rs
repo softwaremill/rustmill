@@ -62,48 +62,56 @@ impl App {
             })
             .collect();
         
-        let zero: Vec<Polygon> = vec![];
-        vector.iter().fold(&zero, |polygons, coord| {
-            let matching_polygons: Vec<&Polygon> = polygons
+        let mut polygons: Vec<Polygon> = vec![];
+        for coord in &vector {
+            let p1 = polygons.clone();
+            let matching_polygons: Vec<usize> = p1
                 .iter()
-                .filter(|p| p.contains_neighbour(coord))
+                .enumerate()
+                .filter_map(|(idx, p)| {
+                    if (p.contains_neighbour(&coord)) {
+                        Some(idx)
+                    } else {
+                        None
+                    }
+                })
                 .collect();
-
             let len: usize = matching_polygons.len();
 
-            if (len == 1) {
-                // matching_polygons.get_mut(0).unwrap().add(coord);
-                // let mut poly = matching_polygons.get_mut(0).unwrap();
-                // poly.add(coord);
-                // let polygon: &Polygon = matching_polygons[0];
-                // polygon.add(coord);
-                // matching_polygons[0].add(coord);
+            if (len == 0) {
+                polygons.push(Polygon::new(&coord));
+            } else if (len == 1) {
+                polygons.get_mut(matching_polygons[0]).unwrap().add(&coord);
             } else if (len == 2) {
-                // let first_polygon = polygons.get_mut(matching_polygon_ids[0]).unwrap();
-                // let second_polygon = polygons.get_mut(matching_polygon_ids[1]).unwrap();
-                // first_polygon.add(coord);
-                // first_polygon.merge(second_polygon);
-                // matching_polygons[0].add(coord);
-                // matching_polygons[0].merge(*matching_polygons[1]);
+                add_and_merge(polygons, &coord, matching_polygons[0], matching_polygons[1]);
             }
-            // match len {
-            //     0 => polygons,
-            //     1 => {
-            //             matching_polygons[0].add(coord);
-            //             polygons
-            //         },
-            //     2 => {
-            //         matching_polygons[0].add(coord).merge(*matching_polygons[1]);
-            //         polygons
-            //     },
-            //     _ => panic!("Something went wrong"),
-            // };
-            polygons
-        });
+        }
 
         println!("{:?}", vector);
     }
 
+}
+
+pub fn add_and_merge(polygons: Vec<Polygon>, coord: &Coord, first: usize, second: usize) -> Vec<Polygon> {
+    let mut newVec: Vec<Polygon> = vec!();
+    let mut first_polygon: Option<Polygon> = None; //= &polygons[first];
+    let mut second_polygon: Option<Polygon> = None; //= &polygons[second];
+
+    for (idx, polygon) in polygons.into_iter().enumerate() {
+        if idx == first {
+            first_polygon = Some(polygon);
+        } else if idx == second {
+            second_polygon = Some(polygon);
+        } else {
+            newVec.push(polygon);
+        }
+    }
+    
+    let merged = first_polygon.unwrap().add(coord).merge(&second_polygon.unwrap());
+    newVec.push(merged);
+    newVec
+    // first_polygon.add(coord);
+    // first_polygon.merge(second_polygon);
 }
 
 pub fn run() {
@@ -153,14 +161,16 @@ pub fn run() {
 type Coord = (u32, u32);
 
 #[derive(Clone, Debug)]
-struct Polygon {
+pub struct Polygon {
     pixels: Vec<Coord>
 }
 
 impl Polygon {
-
-    pub fn new() -> Polygon {
-        Polygon { pixels: Vec::new() }
+    
+    pub fn new(coord: &Coord) -> Polygon {
+        let mut pixels: Vec<Coord> = Vec::new();
+        pixels.push(*coord);
+        Polygon { pixels }
     }
 
     pub fn contains_neighbour(&self, coord: &Coord) -> bool {
@@ -170,12 +180,28 @@ impl Polygon {
         }).is_some()
     }
 
-    pub fn add(&mut self, coord: &Coord) {
-        self.pixels.push(*coord);
+    pub fn add(&self, coord: &Coord) -> Polygon {
+        let mut newVector: Vec<Coord> = vec![];
+        for coord in self.pixels.iter() {
+            newVector.push(*coord);
+        }
+        newVector.push(*coord);
+        Polygon {
+            pixels: newVector
+        }
     }
 
-    pub fn merge(&mut self, oth: &mut Polygon) {
-        self.pixels.append(&mut oth.pixels);
+    pub fn merge(&self, oth: &Polygon) -> Polygon {
+        let mut newVector: Vec<Coord> = vec![];
+        for coord in self.pixels.iter() {
+            newVector.push(*coord);
+        }
+        for coord in oth.pixels.iter() {
+            newVector.push(*coord);            
+        }
+        Polygon {
+            pixels: newVector
+        }
     }
 
 }
