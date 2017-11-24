@@ -48,20 +48,6 @@ impl App {
     fn on_update(&mut self, upd: &UpdateArgs) {
     }
 
-    fn find_polygon_ids(polygons: &Vec<Polygon>, coord: &Coord) -> Vec<usize> {
-        polygons
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, p)| {
-                if p.contains_neighbour(coord) {
-                    Some(idx)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
     fn find_objects(&mut self) {
         let treshold = 20;
         // let objects: Vec<Object> = Vec::new();
@@ -77,25 +63,16 @@ impl App {
             .collect();
         
         let zero: Vec<Polygon> = vec![];
-        vector.iter().fold(zero, |polygons, coord| {
-            // let matching_polygon_ids = App::find_polygon_ids(&polygons, &coord);
+        vector.iter().fold(&zero, |polygons, coord| {
             let matching_polygons: Vec<&Polygon> = polygons
                 .iter()
-                // .enumerate()
                 .filter(|p| p.contains_neighbour(coord))
-                // .filter_map(|(idx, p)| {
-                //     if p.contains_neighbour(coord) {
-                //         Some(idx)
-                //     } else {
-                //         None
-                //     }
-                // })
                 .collect();
 
             let len: usize = matching_polygons.len();
 
             if (len == 1) {
-                matching_polygons.get_mut(0).unwrap().add(coord);
+                // matching_polygons.get_mut(0).unwrap().add(coord);
                 // let mut poly = matching_polygons.get_mut(0).unwrap();
                 // poly.add(coord);
                 // let polygon: &Polygon = matching_polygons[0];
