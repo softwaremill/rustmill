@@ -1,6 +1,7 @@
-use ::Coord;
 use ::std;
 use ::boundaries::*;
+
+type Coord = (u32, u32);
 
 #[derive(Debug)]
 pub struct Polygon {

@@ -1,4 +1,6 @@
 extern crate piston_window;
+use piston_window::*;
+
 extern crate nalgebra as na;
 extern crate ncollide as nc;
 extern crate gfx_device_gl;
@@ -6,68 +8,18 @@ extern crate gfx_graphics;
 extern crate gfx;
 
 extern crate image;
+use image::GenericImage;
 
 use std::env;
 use std::path::Path;
-
-use image::GenericImage;
-
-mod boundaries;
-use boundaries::Boundaries;
-
-mod polygon;
-
-use piston_window::*;
-
 use std::thread;
 use std::sync::mpsc;
-use std::sync::mpsc::*;
 
 mod recognition;
-
-type Coord = (u32, u32);
-
-pub struct App {
-    image_to_draw: G2dTexture,
-    found_objects: Vec<Boundaries>
-}
-
-impl App {
-    pub fn new(image_to_draw: G2dTexture) -> App {  
-        App {
-            image_to_draw,
-            found_objects: Vec::new()
-        }
-    }
-
-    fn on_draw<E: GenericEvent>(&mut self, e: &E, w: &mut PistonWindow) {
-        w.draw_2d(e, |c, g| {
-            clear([0.0, 0.0, 0.0, 1.0], g);
-            image(&self.image_to_draw, c.transform, g);
-            for boundaries in self.found_objects.iter() {
-                rectangle(
-                    [1.0, 0.0, 0.0, 0.5],
-                    boundaries.as_rectangle(),
-                    c.transform,
-                    g
-                );
-            }
-        });
-    }
-
-    fn on_input<E: GenericEvent>(&mut self, _e: &E) {
-    }
-
-    fn on_update(&mut self, _upd: &UpdateArgs, rx: &Receiver<Vec<Boundaries>>) {
-        match rx.try_recv() {
-            Err(_)              => (),
-            Ok(boundaries_vec)  => {
-                println!("Found {} polygons", boundaries_vec.len());
-                self.found_objects = boundaries_vec;
-            }
-        };
-    }
-}
+mod boundaries;
+mod polygon;
+mod app;
+use app::App;
 
 pub fn run() {
     let file = if env::args().count() == 2 {
