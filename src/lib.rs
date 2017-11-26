@@ -10,32 +10,31 @@ extern crate image;
 use std::env;
 use std::path::Path;
 
-use image::Pixel;
 use image::GenericImage;
-use image::DynamicImage;
 
 mod boundaries;
 use boundaries::Boundaries;
 
 mod polygon;
-use polygon::Polygon;
 
 use piston_window::*;
+
+use std::thread;
+use std::sync::mpsc;
+use std::sync::mpsc::*;
+
+mod recognition;
 
 type Coord = (u32, u32);
 
 pub struct App {
-    img: DynamicImage,
-    treshold: u8,
     image_to_draw: G2dTexture,
-    found_objects: Vec<(Boundaries)>
+    found_objects: Vec<Boundaries>
 }
 
 impl App {
-    pub fn new(img: DynamicImage, treshold: u8, image_to_draw: G2dTexture) -> App {  
+    pub fn new(image_to_draw: G2dTexture) -> App {  
         App {
-            img,
-            treshold,
             image_to_draw,
             found_objects: Vec::new()
         }
@@ -59,41 +58,15 @@ impl App {
     fn on_input<E: GenericEvent>(&mut self, _e: &E) {
     }
 
-    fn on_update(&mut self, _upd: &UpdateArgs) {
+    fn on_update(&mut self, _upd: &UpdateArgs, rx: &Receiver<Vec<Boundaries>>) {
+        match rx.try_recv() {
+            Err(_)              => (),
+            Ok(boundaries_vec)  => {
+                println!("Found {} polygons", boundaries_vec.len());
+                self.found_objects = boundaries_vec;
+            }
+        };
     }
-
-    fn find_objects(&mut self) {
-        let polygons: Vec<Polygon> = self.img
-            .pixels()
-            .filter_map(|(x, y, pixel)| {
-                let luma_value = pixel.to_luma().data[0];
-                if luma_value > self.treshold {
-                    Some((x, y))
-                } else {
-                    None
-                }
-            })
-            .fold(Vec::<Polygon>::new(), |found_polygons, coord| {
-                let (matching, mut rest): (Vec<Polygon>, Vec<Polygon>) = found_polygons
-                    .into_iter()
-                    .partition(|p| p.contains_neighbour(&coord));
-                
-                let new_poly: Polygon = matching
-                    .into_iter()
-                    .fold(Polygon::new(coord), |p1, p2| p1 + p2);
-
-                rest.push(new_poly);
-                rest
-            });
-
-        println!("Found {} polygons", polygons.len());
-
-        self.found_objects = polygons
-            .into_iter()
-            .map(|p| p.boundaries())
-            .collect()
-    }
-
 }
 
 pub fn run() {
@@ -127,14 +100,18 @@ pub fn run() {
         &TextureSettings::new()
     ).unwrap();
 
-    let mut app = App::new(img, 100, image_to_draw);
-
-    app.find_objects();
+    let mut app = App::new(image_to_draw);
+    let treshold = 140;
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let found_objects = recognition::find_objects(img, treshold);
+        tx.send(found_objects).unwrap();
+    });
 
     while let Some(e) = window.next() {
         app.on_input(&e);
         if let Some(upd) = e.update_args() {
-            app.on_update(&upd);
+            app.on_update(&upd, &rx);
         }
         app.on_draw(&e, &mut window);
     }
