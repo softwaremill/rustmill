@@ -8,135 +8,92 @@ extern crate gfx;
 extern crate image;
 
 use std::env;
-use std::fs::File;
 use std::path::Path;
 
 use image::Pixel;
 use image::GenericImage;
 use image::DynamicImage;
-use image::ImageDecoder;
-use image::png::PNGDecoder;
+
+mod boundaries;
+use boundaries::Boundaries;
+
+mod polygon;
+use polygon::Polygon;
 
 use piston_window::*;
 
+type Coord = (u32, u32);
+
 pub struct App {
     img: DynamicImage,
+    treshold: u8,
     image_to_draw: G2dTexture,
-    found_objects: Vec<((f64, f64), (f64, f64))>
+    found_objects: Vec<(Boundaries)>
 }
 
 impl App {
-    pub fn new(img: DynamicImage, image_to_draw: G2dTexture) -> App {  
+    pub fn new(img: DynamicImage, treshold: u8, image_to_draw: G2dTexture) -> App {  
         App {
             img,
+            treshold,
             image_to_draw,
             found_objects: Vec::new()
         }
     }
 
     fn on_draw<E: GenericEvent>(&mut self, e: &E, w: &mut PistonWindow) {
-        let size = w.size();
         w.draw_2d(e, |c, g| {
             clear([0.0, 0.0, 0.0, 1.0], g);
             image(&self.image_to_draw, c.transform, g);
+            for boundaries in self.found_objects.iter() {
+                rectangle(
+                    [1.0, 0.0, 0.0, 0.5],
+                    boundaries.as_rectangle(),
+                    c.transform,
+                    g
+                );
+            }
         });
     }
 
-    fn on_input<E: GenericEvent>(&mut self, e: &E) {
+    fn on_input<E: GenericEvent>(&mut self, _e: &E) {
     }
 
-    fn on_update(&mut self, upd: &UpdateArgs) {
+    fn on_update(&mut self, _upd: &UpdateArgs) {
     }
 
     fn find_objects(&mut self) {
-        let treshold = 20;
-
-        let vector: Vec<(u32, u32)> = self.img
+        let polygons: Vec<Polygon> = self.img
             .pixels()
-            .filter(|&(x, y, pixel)| {
-                pixel.to_luma().data[0] > treshold
-            })
-            .map(|(x, y, pixel)| {
-                (x, y)
-            })
-            .collect();
-        
-        let mut empty: Vec<Polygon> = vec![];
-        let polygons: Vec<Polygon> = vector
-            .into_iter()
-            .fold(empty, |acc, coord| {
-                // println!("{:#?}", acc);
-
-                let matching_polygons: Vec<usize> = acc.clone()
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(idx, p)| {
-                        if (p.contains_neighbour(&coord)) {
-                            Some(idx)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
-                let len: usize = matching_polygons.len();
-
-                if len == 0 {
-                    let mut acc_2: Vec<Polygon> = vec![];
-                    for c in acc.into_iter() {
-                        acc_2.push(c);
-                    }
-                    acc_2.push(Polygon::new(&coord));
-                    acc_2
-                } else if len == 1 {
-                    add(acc, &coord, matching_polygons[0])
-                } else if len == 2 {
-                    add_and_merge(acc, &coord, matching_polygons[0], matching_polygons[1])
+            .filter_map(|(x, y, pixel)| {
+                let luma_value = pixel.to_luma().data[0];
+                if luma_value > self.treshold {
+                    Some((x, y))
                 } else {
-                    panic!(":(");
+                    None
                 }
+            })
+            .fold(Vec::<Polygon>::new(), |found_polygons, coord| {
+                let (matching, mut rest): (Vec<Polygon>, Vec<Polygon>) = found_polygons
+                    .into_iter()
+                    .partition(|p| p.contains_neighbour(&coord));
                 
+                let new_poly: Polygon = matching
+                    .into_iter()
+                    .fold(Polygon::new(coord), |p1, p2| p1 + p2);
+
+                rest.push(new_poly);
+                rest
             });
 
-        println!("{:#?}", polygons);
         println!("Found {} polygons", polygons.len());
+
+        self.found_objects = polygons
+            .into_iter()
+            .map(|p| p.boundaries())
+            .collect()
     }
 
-}
-
-pub fn add(polygons: Vec<Polygon>, coord: &Coord, first: usize) -> Vec<Polygon> {
-    let mut newVec: Vec<Polygon> = vec!();
-    for (idx, polygon) in polygons.into_iter().enumerate() {
-        if idx == first {
-            newVec.push(polygon.add(coord));
-        } else {
-            newVec.push(polygon);
-        }
-    }
-    // newVec.push(coord);
-    newVec
-}
-
-pub fn add_and_merge(polygons: Vec<Polygon>, coord: &Coord, first: usize, second: usize) -> Vec<Polygon> {
-    let mut newVec: Vec<Polygon> = vec!();
-    let mut first_polygon: Option<Polygon> = None; //= &polygons[first];
-    let mut second_polygon: Option<Polygon> = None; //= &polygons[second];
-
-    for (idx, polygon) in polygons.into_iter().enumerate() {
-        if idx == first {
-            first_polygon = Some(polygon);
-        } else if idx == second {
-            second_polygon = Some(polygon);
-        } else {
-            newVec.push(polygon);
-        }
-    }
-    
-    let merged = first_polygon.unwrap().merge(&second_polygon.unwrap()).add(coord);
-    newVec.push(merged);
-    newVec
-    // first_polygon.add(coord);
-    // first_polygon.merge(second_polygon);
 }
 
 pub fn run() {
@@ -149,10 +106,10 @@ pub fn run() {
 
     let opengl = OpenGL::V3_2;
 
-        let img = image::open(&path).unwrap();
-        let (img_w, img_h) = img.dimensions();
-        println!("dimensions {:?}", img.dimensions());
-        println!("{:?}", img.color());
+    let img = image::open(&path).unwrap();
+    let (img_w, img_h) = img.dimensions();
+    println!("dimensions {:?}", img.dimensions());
+    println!("{:?}", img.color());
 
     let mut window: PistonWindow = WindowSettings::new(
             "rustmill",
@@ -170,7 +127,7 @@ pub fn run() {
         &TextureSettings::new()
     ).unwrap();
 
-    let mut app = App::new(img, image_to_draw);
+    let mut app = App::new(img, 100, image_to_draw);
 
     app.find_objects();
 
@@ -181,52 +138,4 @@ pub fn run() {
         }
         app.on_draw(&e, &mut window);
     }
-}
-
-type Coord = (u32, u32);
-
-#[derive(Clone, Debug)]
-pub struct Polygon {
-    pixels: Vec<Coord>
-}
-
-impl Polygon {
-    
-    pub fn new(coord: &Coord) -> Polygon {
-        let mut pixels: Vec<Coord> = Vec::new();
-        pixels.push(*coord);
-        Polygon { pixels }
-    }
-
-    pub fn contains_neighbour(&self, coord: &Coord) -> bool {
-        let &(x, y) = coord;
-        self.pixels.iter().find(|&&c| {
-            c == (x, y - 1) || c == (x - 1, y)
-        }).is_some()
-    }
-
-    pub fn add(&self, coord: &Coord) -> Polygon {
-        let mut newVector: Vec<Coord> = vec![];
-        for coord in self.pixels.iter() {
-            newVector.push(*coord);
-        }
-        newVector.push(*coord);
-        Polygon {
-            pixels: newVector
-        }
-    }
-
-    pub fn merge(&self, oth: &Polygon) -> Polygon {
-        let mut newVector: Vec<Coord> = vec![];
-        for coord in self.pixels.iter() {
-            newVector.push(*coord);
-        }
-        for coord in oth.pixels.iter() {
-            newVector.push(*coord);            
-        }
-        Polygon {
-            pixels: newVector
-        }
-    }
-
 }
